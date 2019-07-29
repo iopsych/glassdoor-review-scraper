@@ -112,10 +112,11 @@ logging.getLogger('selenium').setLevel(logging.CRITICAL)
 
 
 def scrape(field, review, author):
-
+    
     def scrape_date(review):
         return review.find_element_by_tag_name(
             'time').get_attribute('datetime')
+
 
     def scrape_emp_title(review):
         if 'Anonymous Employee' not in review.text:
@@ -139,7 +140,7 @@ def scrape(field, review, author):
         else:
             res = np.nan
         return res
-
+      
     def scrape_status(review):
         try:
             res = author.text.split('-')[0]
@@ -150,55 +151,50 @@ def scrape(field, review, author):
 
     def scrape_rev_title(review):
         return review.find_element_by_class_name('summary').text.strip('"')
-
+   
     def scrape_years(review):
-        first_par = review.find_element_by_class_name(
-            'reviewBodyCell').find_element_by_tag_name('p')
-        if '(' in first_par.text:
-            res = first_par.text[first_par.text.find('(') + 1:-1]
-        else:
-            res = np.nan
-        return res
-
+       return review.find_element_by_class_name('mainText').text.strip('"')
+   
     def scrape_helpful(review):
-        try:
-            helpful = review.find_element_by_class_name('helpfulCount')
-            res = helpful[helpful.find('(') + 1: -1]
-        except Exception:
-            res = 0
-        return res
-
-    def expand_show_more(section):
-        try:
-            more_content = section.find_element_by_class_name('moreContent')
-            more_link = more_content.find_element_by_class_name('moreLink')
-            more_link.click()
-        except Exception:
-            pass
+       try: 
+          s = review.find_element_by_class_name('helpfulReviews').text.strip ('""')
+          res = s[s.find("(")+1:s.find(")")]
+       except Exception:
+           res=np.nan
+       return res
 
     def scrape_pros(review):
         try:
-            pros = review.find_element_by_class_name('pros')
-            expand_show_more(pros)
-            res = pros.text.replace('\nShow Less', '')
+            expand = review.find_element_by_xpath(".//span[contains(text(),'Show More')]").click()
+        except Exception:
+            pass    
+        try:
+            pros = review.find_element_by_xpath (".//div/p[contains(text(),'Pros')]/following-sibling::p") 
+            res = pros.text.strip('-')
         except Exception:
             res = np.nan
-        return res
+        return res      
 
     def scrape_cons(review):
         try:
-            cons = review.find_element_by_class_name('cons')
-            expand_show_more(cons)
-            res = cons.text.replace('\nShow Less', '')
+            expand = review.find_element_by_xpath(".//span[contains(text(),'Show More')]").click()
+        except Exception:
+            pass
+        try:
+            cons = review.find_element_by_xpath (".//div/div/p[contains(text(),'Cons')]/following-sibling::p")  
+            res = cons.text.strip('-')
         except Exception:
             res = np.nan
         return res
 
     def scrape_advice(review):
         try:
-            advice = review.find_element_by_class_name('adviceMgmt')
-            expand_show_more(advice)
-            res = advice.text.replace('\nShow Less', '')
+            expand = review.find_element_by_xpath(".//span[contains(text(),'Show More')]").click()
+        except Exception:
+            pass      
+        try:
+            advice = review.find_element_by_xpath (".//div/p[contains(text(),'Advice')]/following-sibling::p")  
+            res = advice.text.strip('-')
         except Exception:
             res = np.nan
         return res
@@ -265,7 +261,7 @@ def scrape(field, review, author):
 
 
 def extract_from_page():
-
+             
     def is_featured(review):
         try:
             review.find_element_by_class_name('featuredFlag')
@@ -283,6 +279,7 @@ def extract_from_page():
         assert set(res.keys()) == set(SCHEMA)
         return res
 
+    
     logger.info(f'Extracting reviews from page {page[0]}')
 
     res = pd.DataFrame([], columns=SCHEMA)
@@ -311,23 +308,18 @@ def extract_from_page():
 
 
 def more_pages():
-    paging_control = browser.find_element_by_class_name('pagingControls')
-    next_ = paging_control.find_element_by_class_name('next')
     try:
-        next_.find_element_by_tag_name('a')
+        browser.find_element_by_css_selector('a.pagination__ArrowStyle__nextArrow.pagination__ArrowStyle__disabled')
         return True
     except selenium.common.exceptions.NoSuchElementException:
         return False
 
-
 def go_to_next_page():
     logger.info(f'Going to page {page[0] + 1}')
-    paging_control = browser.find_element_by_class_name('pagingControls')
-    next_ = paging_control.find_element_by_class_name(
-        'next').find_element_by_tag_name('a')
+    next_ = browser.find_element_by_xpath(".//li[@class='pagination__PaginationStyle__next']/a")
     browser.get(next_.get_attribute('href'))
     time.sleep(1)
-    page[0] = page[0] + 1
+    page[0] = page[0] + 1 
 
 
 def no_reviews():
@@ -385,7 +377,7 @@ def get_browser():
 
 def get_current_page():
     logger.info('Getting current page number')
-    paging_control = browser.find_element_by_class_name('pagingControls')
+    paging_control = browser.find_element_by_class_name('current')
     current = int(paging_control.find_element_by_xpath(
         '//ul//li[contains\
         (concat(\' \',normalize-space(@class),\' \'),\' current \')]\
@@ -420,6 +412,8 @@ def main():
 
     res = pd.DataFrame([], columns=SCHEMA)
 
+    
+    
     sign_in()
 
     if not args.start_from_url:
@@ -442,8 +436,7 @@ def main():
     res = res.append(reviews_df)
 
     # import pdb;pdb.set_trace()
-
-    while more_pages() and\
+    while not more_pages()  and\
             len(res) < args.limit and\
             not date_limit_reached[0]:
         go_to_next_page()
